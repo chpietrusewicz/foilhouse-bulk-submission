@@ -10,8 +10,8 @@ To preview locally, run `python3 -m http.server` from this folder and open
 - `js/config.js`: the submissions email
 - `js/slide.js`: the reusable slide object
 - `js/main.js`: the top-level tabs, ordered form slide list, partial loading, navigation, and form
-- `slides/`: one HTML partial for each form and informational slide
+- `public/slides/`: one HTML partial for each form and informational slide
 - `images/logo.png`: logo
 
-Still to fill in: the `[X]` business days and `[$X]` postage cap in the policy section of `slides/info.html`.
+Still to fill in: the `[X]` business days and `[$X]` postage cap in the policy section of `public/slides/info.html`.
 Submissions open an email with details filled in; photos are attached by the seller. A real backend is needed for automatic uploads.

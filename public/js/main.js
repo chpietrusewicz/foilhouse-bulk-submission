@@ -2,20 +2,20 @@
 // Depends on SITE_CONFIG from config.js and Slide from slide.js.
 
 const formSlides = [
-  new Slide("intro", "Start here", "slides/intro.html"),
-  new Slide("you", "You", "slides/you.html"),
-  new Slide("shipping-address", "Ship-from address", "slides/shipping-address.html"),
-  new Slide("cards", "Your cards", "slides/cards.html"),
-  new Slide("condition", "Condition", "slides/condition.html"),
-  new Slide("details", "Additional details", "slides/details.html"),
-  new Slide("photos", "Photos to attach", "slides/photos.html"),
-  new Slide("confirm", "Confirm", "slides/confirm.html"),
+  new Slide("intro", "Start here", "/slides/intro.html"),
+  new Slide("you", "You", "/slides/you.html"),
+  new Slide("shipping-address", "Ship-from address", "/slides/shipping-address.html"),
+  new Slide("cards", "Your cards", "/slides/cards.html"),
+  new Slide("condition", "Condition", "/slides/condition.html"),
+  new Slide("details", "Additional details", "/slides/details.html"),
+  new Slide("photos", "Photos to attach", "/slides/photos.html"),
+  new Slide("confirm", "Confirm", "/slides/confirm.html"),
 ];
 
 const tabs = [
   new Slide("form", "Bulk submission", null),
-  new Slide("shipping", "Shipping help", "slides/shipping.html"),
-  new Slide("info", "About the program", "slides/info.html"),
+  new Slide("shipping", "Shipping help", "/slides/shipping.html"),
+  new Slide("info", "About the program", "/slides/info.html"),
 ];
 
 const $ = (id) => document.getElementById(id);
