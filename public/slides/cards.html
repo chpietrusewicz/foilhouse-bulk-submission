@@ -1,16 +1,23 @@
-<fieldset>
-  <legend>Your cards</legend>
-  <div class="row">
-    <label>Approx. number of cards<input name="count" type="number" min="1" required /></label>
-    <label>Estimated weight <small>lbs, roughly</small><input name="weight" required /></label>
-  </div>
-  <div>
-    What's in the lot?
-    <div class="checks">
-      <label class="chk"><input type="checkbox" name="kind" value="Bulk/commons" /> Bulk / commons</label>
-      <label class="chk"><input type="checkbox" name="kind" value="Holos/rares" /> Holos / rares</label>
-      <label class="chk"><input type="checkbox" name="kind" value="Sealed product" /> Sealed product</label>
-      <label class="chk"><input type="checkbox" name="kind" value="Graded cards" /> Graded cards</label>
+<fieldset class="cards-fieldset">
+  <legend>Card entries</legend>
+  <div id="card-entries" class="card-entries">
+    <div class="card-entry" data-entry-index="0">
+      <label>Number of cards<input class="card-count" type="number" min="1" required /></label>
+      <label>Type
+        <select class="card-type">
+          <option>Common / uncommon</option>
+          <option>Holo / reverse holo</option>
+          <option>EX / V / GX</option>
+        </select>
+      </label>
+      <label class="photo-picker" title="Add card photos">
+        <span class="photo-plus" aria-hidden="true">+</span>
+        <span>Add photos</span>
+        <input class="photo-input" type="file" accept="image/jpeg,image/png,image/webp,image/heic" multiple />
+      </label>
+      <div class="photo-previews" aria-live="polite"></div>
     </div>
   </div>
+  <button class="btn add-entry" id="add-card-entry" type="button">+ Add card type</button>
+  <p class="muted card-photo-note">Add at least one photo. You can add up to 10 photos total.</p>
 </fieldset>

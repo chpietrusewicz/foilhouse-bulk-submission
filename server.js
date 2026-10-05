@@ -26,7 +26,7 @@ const PHOTO_TYPES = {
   "image/webp": ".webp",
   "image/heic": ".heic",
 };
-const ALLOWED_KINDS = ["Bulk/commons", "Holos/rares", "Sealed product", "Graded cards"];
+const ALLOWED_KINDS = ["Common / uncommon", "Holo / reverse holo", "EX / V / GX"];
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -58,7 +58,6 @@ async function notify(record, files) {
     "",
     `Name: ${record.name}`,
     `Email: ${record.email}`,
-    `PayPal: ${record.paypal}`,
     `Phone: ${record.phone || "-"}`,
     "",
     `Ship from: ${record.street}, ${record.city}, ${record.state} ${record.zip}`,
@@ -94,7 +93,6 @@ function parseSubmission(body) {
   const data = {
     name: clean(body.name, 120),
     email: clean(body.email, 200).toLowerCase(),
-    paypal: clean(body.paypal, 200).toLowerCase(),
     phone: clean(body.phone, 40),
     street: clean(body.street, 200),
     city: clean(body.city, 100),
@@ -111,14 +109,13 @@ function parseSubmission(body) {
   let error = null;
   if (!data.name) error = "Please enter your name.";
   else if (!EMAIL_RE.test(data.email)) error = "Please enter a valid email address.";
-  else if (!EMAIL_RE.test(data.paypal)) error = "Please enter a valid PayPal email address.";
+  else if (!data.phone) error = "Please enter your phone number.";
   else if (!data.street || !data.city) error = "Please enter your full ship-from address.";
   else if (!/^[A-Z]{2}$/.test(data.state)) error = "Please enter a two-letter state code.";
   else if (!/^\d{5}(-\d{4})?$/.test(data.zip)) error = "Please enter a valid ZIP code.";
   else if (!Number.isInteger(data.count) || data.count < 1 || data.count > 1000000) {
     error = "Please enter how many cards you have.";
-  } else if (!data.weight) error = "Please enter an estimated weight.";
-  else if (!body.confirmOwner || !body.confirmPolicy) {
+  } else if (!body.confirmOwner || !body.confirmPolicy) {
     error = "Please confirm the checkboxes at the bottom of the form.";
   }
   return { data, error };

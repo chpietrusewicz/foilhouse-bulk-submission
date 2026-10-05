@@ -3,12 +3,9 @@
 
 const formSlides = [
   new Slide("intro", "Start here", "/slides/intro.html"),
-  new Slide("you", "You", "/slides/you.html"),
+  new Slide("you", "Personal information", "/slides/you.html"),
   new Slide("shipping-address", "Ship-from address", "/slides/shipping-address.html"),
   new Slide("cards", "Your cards", "/slides/cards.html"),
-  new Slide("condition", "Condition", "/slides/condition.html"),
-  new Slide("details", "Additional details", "/slides/details.html"),
-  new Slide("photos", "Photos to attach", "/slides/photos.html"),
   new Slide("confirm", "Confirm", "/slides/confirm.html"),
 ];
 
@@ -23,6 +20,10 @@ let activeTab = 0;
 let activeFormSlide = 0;
 let renderVersion = 0;
 const formDraft = {};
+const MAX_PHOTOS = 10;
+let cardEntries = [
+  { count: "", type: "Common / uncommon", photos: [] },
+];
 
 function tabIndexFromHash() {
   const requested = (location.hash || "#form").slice(1);
@@ -92,7 +93,89 @@ function formNavigation() {
 }
 
 function updateNextState() {
-  $("next").disabled = Boolean($("f") && !$("f").checkValidity());
+  const formInvalid = $("f") && !$("f").checkValidity();
+  const cardsNeedPhoto = formSlides[activeFormSlide].id === "cards" && !allCardPhotos().length;
+  $("next").disabled = Boolean(formInvalid || cardsNeedPhoto);
+}
+
+function allCardPhotos() {
+  return cardEntries.flatMap((entry) => entry.photos);
+}
+
+function renderCardEntries() {
+  const container = $("card-entries");
+  if (!container) return;
+
+  container.innerHTML = cardEntries
+    .map(
+      (entry, index) => `
+        <div class="card-entry" data-entry-index="${index}">
+          <label>Number of cards<input class="card-count" type="number" min="1" value="${entry.count}" required /></label>
+          <label>Type
+            <select class="card-type">
+              <option ${entry.type === "Common / uncommon" ? "selected" : ""}>Common / uncommon</option>
+              <option ${entry.type === "Holo / reverse holo" ? "selected" : ""}>Holo / reverse holo</option>
+              <option ${entry.type === "EX / V / GX" ? "selected" : ""}>EX / V / GX</option>
+            </select>
+          </label>
+          <label class="photo-picker" title="Add card photos">
+            <span class="photo-plus" aria-hidden="true">+</span>
+            <span>Add photos</span>
+            <input class="photo-input" type="file" accept="image/jpeg,image/png,image/webp,image/heic" multiple />
+          </label>
+          <div class="photo-previews" aria-live="polite">
+            ${entry.photos
+              .map(
+                (file, photoIndex) => `
+                  <span class="photo-preview">
+                    <img src="${URL.createObjectURL(file)}" alt="Selected card photo" />
+                    <button class="photo-remove" type="button" data-photo-index="${photoIndex}" aria-label="Remove ${file.name}">×</button>
+                  </span>
+                `,
+              )
+              .join("")}
+          </div>
+          <button class="remove-entry" type="button" aria-label="Remove card entry">Remove</button>
+        </div>
+      `,
+    )
+    .join("");
+
+  container.querySelectorAll(".card-entry").forEach((row) => {
+    const index = Number(row.dataset.entryIndex);
+    row.querySelector(".card-count").addEventListener("input", (event) => {
+      cardEntries[index].count = event.target.value;
+      updateNextState();
+    });
+    row.querySelector(".card-type").addEventListener("change", (event) => {
+      cardEntries[index].type = event.target.value;
+    });
+    row.querySelector(".photo-input").addEventListener("change", (event) => {
+      const available = MAX_PHOTOS - allCardPhotos().length;
+      cardEntries[index].photos.push(...Array.from(event.target.files).slice(0, available));
+      renderCardEntries();
+      updateNextState();
+    });
+    row.querySelectorAll(".photo-remove").forEach((button) => {
+      button.addEventListener("click", () => {
+        cardEntries[index].photos.splice(Number(button.dataset.photoIndex), 1);
+        renderCardEntries();
+        updateNextState();
+      });
+    });
+    row.querySelector(".remove-entry").addEventListener("click", () => {
+      if (cardEntries.length === 1) return;
+      cardEntries.splice(index, 1);
+      renderCardEntries();
+      updateNextState();
+    });
+  });
+
+  $("add-card-entry").onclick = () => {
+    cardEntries.push({ count: "", type: "Common / uncommon", photos: [] });
+    renderCardEntries();
+    updateNextState();
+  };
 }
 
 async function renderFormSlide() {
@@ -113,16 +196,16 @@ async function renderFormSlide() {
         </form>
         <div id="out" class="card">
           <p>
-            <b>Your email should have opened.</b> Attach your photos and send
-            it. If nothing opened, copy this and email it with your photos to
-            <span id="to"></span>:
+            <b>Your submission is ready.</b> Your photos and details will be
+            sent securely for review.
           </p>
           <textarea id="txt" readonly></textarea>
-          <p style="margin-top: 12px"><button class="btn" id="copy" type="button">Copy details</button></p>
+          <p style="margin-top: 12px"><button class="btn" id="copy" type="button">Copy status</button></p>
         </div>
       </section>
     `;
     restoreFormDraft();
+    renderCardEntries();
     formNavigation();
     bindFormControls();
     document.title = `Foil House | ${slide.title}`;
@@ -180,46 +263,52 @@ function bindFormControls() {
 
 /* ---------- Submission form ---------- */
 
-function buildSubmissionText(data) {
-  const get = (key) => (data.get(key) || formDraft[key] || "").toString().trim();
-  const contents = formDraft.kind?.join(", ") || "not specified";
+function buildSubmissionFormData() {
+  const submission = new FormData();
+  const fields = [
+    "name",
+    "email",
+    "phone",
+    "street",
+    "city",
+    "state",
+    "zip",
+    "condition",
+    "ask",
+    "notes",
+  ];
 
-  return [
-    "NEW BULK SUBMISSION",
-    "",
-    `Name: ${get("name")}`,
-    `Email: ${get("email")}`,
-    `PayPal: ${get("paypal")}`,
-    `Phone: ${get("phone") || "-"}`,
-    "",
-    `Ship from: ${get("street")}, ${get("city")}, ${get("state").toUpperCase()} ${get("zip")}`,
-    "",
-    `Approx. cards: ${get("count")}`,
-    `Est. weight (lbs): ${get("weight")}`,
-    `Contents: ${contents}`,
-    `Condition: ${get("condition") || "-"}`,
-    `Hoping for: ${get("ask") || "-"}`,
-    `Notes: ${get("notes") || "-"}`,
-    "",
-    "Confirmed: cards are mine to sell, I'm 18+, I agree to the program policy.",
-    "(Photos attached to this email.)",
-  ].join("\n");
+  fields.forEach((field) => submission.append(field, formDraft[field] || ""));
+  submission.append(
+    "count",
+    cardEntries.reduce((total, entry) => total + Number(entry.count || 0), 0),
+  );
+  cardEntries.forEach((entry) => submission.append("kind", entry.type));
+  submission.append("confirmOwner", formDraft.confirmOwner?.[0] || "");
+  submission.append("confirmPolicy", formDraft.confirmPolicy?.[0] || "");
+  allCardPhotos().forEach((file) => submission.append("photos", file));
+  return submission;
 }
 
-function handleSubmit(event) {
+async function handleSubmit(event) {
   event.preventDefault();
   saveFormDraft();
-  const data = new FormData(event.target);
-  const body = buildSubmissionText(data);
-  const name = (formDraft.name || "").toString().trim();
-  const subject = `Bulk submission - ${name}`;
-
-  $("txt").value = body;
   $("out").style.display = "block";
+  $("out").querySelector("b").textContent = "Sending your submission...";
 
-  location.href =
-    `mailto:${SITE_CONFIG.submissionEmail}` +
-    `?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  try {
+    const response = await fetch("/api/submissions", {
+      method: "POST",
+      body: buildSubmissionFormData(),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "The submission failed.");
+    $("out").querySelector("b").textContent = "Submission received.";
+    $("txt").value = `Your submission ID is ${result.id}. We will review it and follow up by email.`;
+  } catch (error) {
+    $("out").querySelector("b").textContent = "We could not send your submission.";
+    $("txt").value = error.message;
+  }
   $("out").scrollIntoView({ behavior: "smooth" });
 }
 
