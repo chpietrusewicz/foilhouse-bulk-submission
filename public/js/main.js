@@ -22,7 +22,7 @@ let renderVersion = 0;
 const formDraft = {};
 const MAX_PHOTOS = 10;
 let cardEntries = [
-  { count: "", type: "Common / uncommon", photos: [] },
+  { count: "", type: SITE_CONFIG.rates[0].type, photos: [] },
 ];
 
 function tabIndexFromHash() {
@@ -102,6 +102,21 @@ function allCardPhotos() {
   return cardEntries.flatMap((entry) => entry.photos);
 }
 
+function renderRates() {
+  const list = $("rate-list");
+  if (!list) return;
+  list.innerHTML = "";
+  SITE_CONFIG.rates.forEach(({ type, rate }) => {
+    const item = document.createElement("li");
+    const typeLabel = document.createElement("span");
+    const rateLabel = document.createElement("strong");
+    typeLabel.textContent = type;
+    rateLabel.textContent = rate;
+    item.append(typeLabel, rateLabel);
+    list.append(item);
+  });
+}
+
 function renderCardEntries() {
   const container = $("card-entries");
   if (!container) return;
@@ -113,9 +128,12 @@ function renderCardEntries() {
           <label>Number of cards<input class="card-count" type="number" min="1" value="${entry.count}" required /></label>
           <label>Type
             <select class="card-type">
-              <option ${entry.type === "Common / uncommon" ? "selected" : ""}>Common / uncommon</option>
-              <option ${entry.type === "Holo / reverse holo" ? "selected" : ""}>Holo / reverse holo</option>
-              <option ${entry.type === "EX / V / GX" ? "selected" : ""}>EX / V / GX</option>
+              ${SITE_CONFIG.rates
+                .map(
+                  ({ type }) =>
+                    `<option ${entry.type === type ? "selected" : ""}>${type}</option>`,
+                )
+                .join("")}
             </select>
           </label>
           <label class="photo-picker" title="Add card photos">
@@ -172,7 +190,7 @@ function renderCardEntries() {
   });
 
   $("add-card-entry").onclick = () => {
-    cardEntries.push({ count: "", type: "Common / uncommon", photos: [] });
+    cardEntries.push({ count: "", type: SITE_CONFIG.rates[0].type, photos: [] });
     renderCardEntries();
     updateNextState();
   };
@@ -206,6 +224,7 @@ async function renderFormSlide() {
     `;
     restoreFormDraft();
     renderCardEntries();
+    renderRates();
     formNavigation();
     bindFormControls();
     document.title = `Foil House | ${slide.title}`;
