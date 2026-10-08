@@ -3,9 +3,9 @@
 
 const formSlides = [
   new Slide("intro", "Start here", "/slides/intro.html"),
+  new Slide("cards", "Your cards", "/slides/cards.html"),
   new Slide("you", "Personal information", "/slides/you.html"),
   new Slide("shipping-address", "Ship-from address", "/slides/shipping-address.html"),
-  new Slide("cards", "Your cards", "/slides/cards.html"),
   new Slide("confirm", "Confirm", "/slides/confirm.html"),
 ];
 
@@ -22,7 +22,7 @@ let renderVersion = 0;
 const formDraft = {};
 const MAX_PHOTOS = 10;
 let cardEntries = [
-  { count: "", type: SITE_CONFIG.rates[0].type, photos: [] },
+  { count: "", type: "", photos: [] },
 ];
 
 function tabIndexFromHash() {
@@ -94,8 +94,13 @@ function formNavigation() {
 
 function updateNextState() {
   const formInvalid = $("f") && !$("f").checkValidity();
-  const cardsNeedPhoto = formSlides[activeFormSlide].id === "cards" && !allCardPhotos().length;
-  $("next").disabled = Boolean(formInvalid || cardsNeedPhoto);
+  const cardsIncomplete =
+    formSlides[activeFormSlide].id === "cards" &&
+    !cardEntries.every((entry) => {
+      const count = Number(entry.count);
+      return Number.isInteger(count) && count > 0 && entry.type && entry.photos.length > 0;
+    });
+  $("next").disabled = Boolean(formInvalid || cardsIncomplete);
 }
 
 function allCardPhotos() {
@@ -127,7 +132,8 @@ function renderCardEntries() {
         <div class="card-entry" data-entry-index="${index}">
           <label>Number of cards<input class="card-count" type="number" min="1" value="${entry.count}" required /></label>
           <label>Type
-            <select class="card-type">
+            <select class="card-type" required>
+              <option value="" disabled ${!entry.type ? "selected" : ""}>Choose a type</option>
               ${SITE_CONFIG.rates
                 .map(
                   ({ type }) =>
@@ -167,6 +173,7 @@ function renderCardEntries() {
     });
     row.querySelector(".card-type").addEventListener("change", (event) => {
       cardEntries[index].type = event.target.value;
+      updateNextState();
     });
     row.querySelector(".photo-input").addEventListener("change", (event) => {
       const available = MAX_PHOTOS - allCardPhotos().length;
@@ -190,7 +197,7 @@ function renderCardEntries() {
   });
 
   $("add-card-entry").onclick = () => {
-    cardEntries.push({ count: "", type: SITE_CONFIG.rates[0].type, photos: [] });
+    cardEntries.push({ count: "", type: "", photos: [] });
     renderCardEntries();
     updateNextState();
   };
