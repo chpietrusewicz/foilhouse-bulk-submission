@@ -3,7 +3,14 @@
 
 const formSlides = [
   new Slide("intro", "Start here", "/slides/intro.html"),
-  new Slide("cards", "Your cards", "/slides/cards.html"),
+  new Slide("cards", "Your cards", "/slides/cards.html",
+    new ConfirmationMessage(
+      "Please verify card counts are accurate, the final amount will be verified when we receive your shipment",
+      "Ready to continue?",
+      "Continue",
+      "Keep editing",
+    ),
+  ),
   new Slide("you", "Personal information", "/slides/you.html"),
   new Slide("shipping-address", "Ship-from address", "/slides/shipping-address.html"),
   new Slide("confirm", "Confirm", "/slides/confirm.html"),
@@ -348,13 +355,52 @@ function copyDetails() {
   }
 }
 
-$("back").addEventListener("click", () => navigateFormSlide(activeFormSlide - 1));
-$("next").addEventListener("click", () => {
+function requestConfirmation(confirmation) {
+  if (!confirmation) return Promise.resolve(true);
+
+  const modal = $("confirmation-modal");
+  const title = $("confirmation-title");
+  const message = $("confirmation-message");
+  const cancel = $("confirmation-cancel");
+  const accept = $("confirmation-accept");
+  const previousFocus = document.activeElement;
+
+  title.textContent = confirmation.title;
+  message.textContent = confirmation.message;
+  cancel.textContent = confirmation.cancelLabel;
+  accept.textContent = confirmation.confirmLabel;
+  modal.hidden = false;
+  accept.focus();
+
+  return new Promise((resolve) => {
+    const finish = (confirmed) => {
+      modal.hidden = true;
+      cancel.onclick = null;
+      accept.onclick = null;
+      window.removeEventListener("keydown", handleKeydown);
+      if (previousFocus && typeof previousFocus.focus === "function") previousFocus.focus();
+      resolve(confirmed);
+    };
+    const handleKeydown = (event) => {
+      if (event.key === "Escape") finish(false);
+    };
+    cancel.onclick = () => finish(false);
+    accept.onclick = () => finish(true);
+    window.addEventListener("keydown", handleKeydown);
+  });
+}
+
+async function handleNext() {
+  const slide = formSlides[activeFormSlide];
+  if (!(await requestConfirmation(slide.confirmation))) return;
   if (activeFormSlide === formSlides.length - 1) {
     $("f").requestSubmit();
     return;
   }
   navigateFormSlide(activeFormSlide + 1);
-});
+}
+
+$("back").addEventListener("click", () => navigateFormSlide(activeFormSlide - 1));
+$("next").addEventListener("click", handleNext);
 window.addEventListener("hashchange", showTab);
 showTab();
