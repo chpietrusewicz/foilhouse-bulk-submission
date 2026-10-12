@@ -11,9 +11,10 @@ const formSlides = [
       "Keep editing",
     ),
   ),
-  new Slide("you", "Personal information", "/slides/you.html"),
+  new Slide("you", "Information", "/slides/you.html"),
   new Slide("shipping-address", "Ship-from address", "/slides/shipping-address.html"),
   new Slide("confirm", "Confirm", "/slides/confirm.html"),
+  new Slide("summary", "Estimated payout", "/slides/summary.html"),
 ];
 
 const tabs = [
@@ -28,6 +29,7 @@ let activeFormSlide = 0;
 let renderVersion = 0;
 const formDraft = {};
 const MAX_PHOTOS = 10;
+const MAX_CARD_ENTRIES = 4;
 let cardEntries = [
   { count: "", type: "", photos: [] },
 ];
@@ -129,6 +131,52 @@ function renderRates() {
   });
 }
 
+function formatCurrency(amount) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(amount);
+}
+
+function estimatedApprovalDate() {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "long",
+  }).format(date);
+}
+
+function renderSummary() {
+  const body = $("summary-rows");
+  const totalCards = cardEntries.reduce((total, entry) => total + Number(entry.count || 0), 0);
+  if (!body) return;
+
+  const entriesByType = new Map();
+  cardEntries.forEach((entry) => {
+    const count = Number(entry.count || 0);
+    if (!entry.type || !count) return;
+    const existing = entriesByType.get(entry.type) || 0;
+    entriesByType.set(entry.type, existing + count);
+  });
+
+  let cardPayout = 0;
+  body.innerHTML = Array.from(entriesByType.entries())
+    .map(([type, count]) => {
+      const rate = SITE_CONFIG.rates.find((item) => item.type === type);
+      const subtotal = rate.unit === "thousand"
+        ? (count / 1000) * rate.amount
+        : count * rate.amount;
+      cardPayout += subtotal;
+      return `<tr><th scope="row">${type}</th><td>${count.toLocaleString()}</td><td>${rate.rate}</td><td>${formatCurrency(subtotal)}</td></tr>`;
+    })
+    .join("");
+
+  const shipping = (totalCards / 1000) * SITE_CONFIG.shippingRate;
+  $("summary-shipping").textContent = formatCurrency(shipping);
+  $("summary-total").textContent = formatCurrency(cardPayout + shipping);
+  $("summary-approval-date").textContent = estimatedApprovalDate();
+}
+
 function renderCardEntries() {
   const container = $("card-entries");
   if (!container) return;
@@ -172,6 +220,8 @@ function renderCardEntries() {
     )
     .join("");
 
+  $("add-card-entry").hidden = cardEntries.length >= MAX_CARD_ENTRIES;
+
   container.querySelectorAll(".card-entry").forEach((row) => {
     const index = Number(row.dataset.entryIndex);
     row.querySelector(".card-count").addEventListener("input", (event) => {
@@ -204,6 +254,7 @@ function renderCardEntries() {
   });
 
   $("add-card-entry").onclick = () => {
+    if (cardEntries.length >= MAX_CARD_ENTRIES) return;
     cardEntries.push({ count: "", type: "", photos: [] });
     renderCardEntries();
     updateNextState();
@@ -219,7 +270,7 @@ async function renderFormSlide() {
     const html = await loadSlideHtml(slide);
     if (version !== renderVersion) return;
     $("content").innerHTML = `
-      <section id="form">
+      <section id="form" class="form-slide-${slide.id}">
         <form id="f" class="slide-form">
           <div class="slide-box">
             <h2>${slide.title}</h2>
@@ -239,6 +290,7 @@ async function renderFormSlide() {
     restoreFormDraft();
     renderCardEntries();
     renderRates();
+    renderSummary();
     formNavigation();
     bindFormControls();
     document.title = `Foil House | ${slide.title}`;

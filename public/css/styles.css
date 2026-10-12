@@ -54,9 +54,9 @@ body {
   border-bottom: 4px solid var(--blue);
 }
 .bar .in {
-  max-width: 860px;
+  width: 100%;
   margin: 0 auto;
-  padding: 10px 20px;
+  padding: 10px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -69,6 +69,7 @@ body {
   gap: 14px;
   text-decoration: none;
   color: #fff;
+  margin-right: auto;
 }
 .logo img {
   width: 56px;
@@ -80,16 +81,9 @@ body {
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-.logo em {
-  font: normal 0.8rem var(--body);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--blue);
-  display: block;
-  margin-top: -4px;
-}
 .bar nav {
   display: flex;
+  justify-content: flex-end;
   gap: 10px;
   flex-wrap: wrap;
 }
@@ -115,14 +109,15 @@ main {
   width: 100%;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 #content {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
 }
 #content > section {
   width: 100%;
@@ -236,6 +231,8 @@ p {
 }
 .confirmation-cancel {
   background: transparent;
+  color: var(--link);
+  border-color: var(--link);
 }
 #progress {
   color: var(--muted);
@@ -382,7 +379,12 @@ form {
   display: grid;
   align-content: start;
   gap: 16px;
-  overflow: hidden;
+  overflow: visible;
+}
+.form-slide-cards .slide-form,
+.form-slide-cards .slide-box {
+  height: auto;
+  min-height: 0;
 }
 .slide-box h2 {
   font-size: clamp(2.4rem, 6vw, 3.5rem);
@@ -390,6 +392,50 @@ form {
 }
 .slide-box .lede {
   margin: 0;
+}
+.summary-intro,
+.summary-date {
+  margin: 0;
+}
+.summary-table-wrap {
+  overflow-x: auto;
+}
+.summary-table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+.summary-table th,
+.summary-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+}
+.summary-table th:first-child,
+.summary-table td:first-child {
+  text-align: left;
+}
+.summary-table thead th {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+.summary-table tbody th {
+  font-weight: 700;
+}
+.summary-table tfoot th,
+.summary-table tfoot td {
+  border-bottom: 0;
+  font-weight: 700;
+}
+.summary-total-row th,
+.summary-total-row td {
+  border-top: 2px solid var(--ink);
+  font-size: 1.1rem;
+}
+.summary-date strong {
+  color: var(--link);
 }
 .slide-box .row {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -407,8 +453,6 @@ form {
   display: grid;
   gap: 10px;
   min-width: 0;
-  max-height: 230px;
-  overflow-y: auto;
   padding-right: 4px;
 }
 .card-entry {
@@ -506,6 +550,9 @@ form {
 .add-entry {
   padding: 9px 16px;
   font-size: 0.9rem;
+}
+.add-entry[hidden] {
+  display: none;
 }
 .card-photo-note {
   margin: 0;
