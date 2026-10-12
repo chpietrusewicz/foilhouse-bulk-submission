@@ -9,6 +9,7 @@ const helmet = require("helmet");
 const multer = require("multer");
 const nodemailer = require("nodemailer");
 const rateLimit = require("express-rate-limit");
+const { OAuth2Client } = require("google-auth-library");
 
 /* ---------- Config ---------- */
 
@@ -16,6 +17,11 @@ const PORT = process.env.PORT || 3000;
 const IS_PROD = process.env.NODE_ENV === "production";
 const NOTIFY_EMAIL = process.env.SUBMISSION_EMAIL || "foilhousetcg@gmail.com";
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, "data", "submissions"));
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
+const AUTH_SESSION_SECRET = process.env.AUTH_SESSION_SECRET || "";
+const AUTH_COOKIE = "foilhouse_auth";
+const AUTH_SESSION_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID || undefined);
 
 const MAX_PHOTOS = 10;
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
@@ -31,6 +37,68 @@ const ALLOWED_KINDS = ["Common / uncommon", "Holo / reverse holo", "EX / V / GX"
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 class UserError extends Error {}
+
+function encodeSessionPart(value) {
+  return Buffer.from(value).toString("base64url");
+}
+
+function signSession(payload) {
+  const encodedPayload = encodeSessionPart(JSON.stringify(payload));
+  const signature = crypto
+    .createHmac("sha256", AUTH_SESSION_SECRET)
+    .update(encodedPayload)
+    .digest("base64url");
+  return `${encodedPayload}.${signature}`;
+}
+
+function readAuthUser(req) {
+  if (!AUTH_SESSION_SECRET) return null;
+  const cookieHeader = req.headers.cookie || "";
+  const cookie = cookieHeader
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${AUTH_COOKIE}=`));
+  if (!cookie) return null;
+
+  const value = cookie.slice(`${AUTH_COOKIE}=`.length);
+  const [encodedPayload, signature] = value.split(".");
+  if (!encodedPayload || !signature) return null;
+  const expectedSignature = crypto
+    .createHmac("sha256", AUTH_SESSION_SECRET)
+    .update(encodedPayload)
+    .digest("base64url");
+  const actualBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expectedSignature);
+  if (
+    actualBuffer.length !== expectedBuffer.length ||
+    !crypto.timingSafeEqual(actualBuffer, expectedBuffer)
+  ) return null;
+
+  try {
+    const payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
+    return payload.exp > Date.now() ? payload.user : null;
+  } catch {
+    return null;
+  }
+}
+
+function setAuthCookie(res, user) {
+  const payload = {
+    user,
+    exp: Date.now() + AUTH_SESSION_MAX_AGE,
+  };
+  const secure = IS_PROD ? "; Secure" : "";
+  res.setHeader(
+    "Set-Cookie",
+    `${AUTH_COOKIE}=${signSession(payload)}; Max-Age=${AUTH_SESSION_MAX_AGE / 1000}; Path=/; HttpOnly; SameSite=Lax${secure}`,
+  );
+}
+
+function requireAuth(req, res, next) {
+  req.user = readAuthUser(req);
+  if (!req.user) return res.status(401).json({ error: "Please sign in before submitting." });
+  next();
+}
 
 /* ---------- Email (optional) ---------- */
 
@@ -174,18 +242,23 @@ if (process.env.TRUST_PROXY) app.set("trust proxy", Number(process.env.TRUST_PRO
 
 app.use(
   helmet({
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
     contentSecurityPolicy: {
       useDefaults: true,
       directives: {
+        "script-src": ["'self'", "https://accounts.google.com"],
         "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         "font-src": ["'self'", "https://fonts.gstatic.com"],
         "img-src": ["'self'", "data:"],
+        "connect-src": ["'self'", "https://accounts.google.com"],
+        "frame-src": ["https://accounts.google.com"],
         "upgrade-insecure-requests": IS_PROD ? [] : null,
       },
     },
   })
 );
 
+app.use(express.json({ limit: "20kb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
 const submissionLimiter = rateLimit({
@@ -198,7 +271,50 @@ const submissionLimiter = rateLimit({
 
 app.get("/healthz", (req, res) => res.json({ ok: true }));
 
-app.post("/api/submissions", submissionLimiter, assignId, receiveUpload, (req, res) => {
+app.get("/api/auth/config", (req, res) => {
+  res.json({ clientId: GOOGLE_CLIENT_ID });
+});
+
+app.get("/api/auth/me", (req, res) => {
+  res.json({ user: readAuthUser(req) });
+});
+
+app.post("/api/auth/google", async (req, res) => {
+  if (!GOOGLE_CLIENT_ID || !AUTH_SESSION_SECRET) {
+    return res.status(503).json({ error: "Google sign-in is not configured yet." });
+  }
+  const credential = clean(req.body.credential, 10000);
+  if (!credential) return res.status(400).json({ error: "Google sign-in did not return a credential." });
+
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    if (!payload?.sub || !payload.email || !payload.email_verified) {
+      return res.status(401).json({ error: "We could not verify that Google account." });
+    }
+    const user = {
+      id: payload.sub,
+      email: payload.email,
+      name: payload.name || payload.email,
+      picture: payload.picture || "",
+    };
+    setAuthCookie(res, user);
+    res.json({ user });
+  } catch (error) {
+    console.error("Google sign-in failed:", error.message);
+    res.status(401).json({ error: "Google sign-in could not be verified." });
+  }
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  res.setHeader("Set-Cookie", `${AUTH_COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax`);
+  res.json({ ok: true });
+});
+
+app.post("/api/submissions", requireAuth, submissionLimiter, assignId, receiveUpload, (req, res) => {
   const files = req.files || [];
 
   // Hidden honeypot field: bots fill it in, people never see it.
@@ -217,6 +333,7 @@ app.post("/api/submissions", submissionLimiter, assignId, receiveUpload, (req, r
     id: req.submissionId,
     receivedAt: new Date().toISOString(),
     status: "pending",
+    submittedBy: req.user,
     ...data,
     photos: files.map((f) => f.filename),
   };

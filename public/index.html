@@ -14,39 +14,52 @@
     <link rel="stylesheet" href="css/styles.css" />
   </head>
   <body>
-    <header class="bar">
-      <div class="in">
-        <a class="logo" href="#form"
-          ><img
-            src="images/logo.png"
-            alt="Foil House Cards and Collectibles logo"
-          /><span>Foil House</span></a
-        >
-        <nav>
-          <a class="nb" href="#form">Bulk submission</a
-          ><a class="nb" href="#shipping">Shipping help</a
-          ><a class="nb" href="#info">About the program</a>
-        </nav>
+    <section class="auth-screen" id="auth-screen">
+      <div class="auth-panel">
+        <img src="images/logo.png" alt="Foil House Cards and Collectibles logo" />
+        <p class="auth-kicker">Foil House</p>
+        <h1>Sign in to sell your bulk</h1>
+        <p class="auth-copy">Use your Google account to start your bulk submission.</p>
+        <div id="google-signin"></div>
+        <p class="auth-error" id="auth-error" role="alert" hidden></p>
       </div>
-    </header>
-    <main>
-      <div id="content" aria-live="polite"></div>
-      <div id="form-navigation" class="slide-navigation" aria-label="Form section navigation">
-        <button class="btn" id="back" type="button">Back</button>
-        <span id="progress" aria-live="polite"></span>
-        <button class="btn" id="next" type="button">Next</button>
-      </div>
-    </main>
-    <div class="confirmation-modal" id="confirmation-modal" hidden>
-      <div class="confirmation-window" role="dialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-message">
-        <h2 id="confirmation-title">Please confirm</h2>
-        <p id="confirmation-message"></p>
-        <div class="confirmation-actions">
-          <button class="btn confirmation-cancel" id="confirmation-cancel" type="button">Cancel</button>
-          <button class="btn" id="confirmation-accept" type="button">Continue</button>
+    </section>
+    <div id="app-shell" hidden>
+      <header class="bar">
+        <div class="in">
+          <a class="logo" href="#form"
+            ><img
+              src="images/logo.png"
+              alt="Foil House Cards and Collectibles logo"
+            /><span>Foil House</span></a
+          >
+          <nav>
+            <a class="nb" href="#form">Bulk submission</a
+            ><a class="nb" href="#shipping">Shipping help</a
+            ><a class="nb" href="#info">About the program</a>
+          </nav>
+        </div>
+      </header>
+      <main>
+        <div id="content" aria-live="polite"></div>
+        <div id="form-navigation" class="slide-navigation" aria-label="Form section navigation">
+          <button class="btn" id="back" type="button">Back</button>
+          <span id="progress" aria-live="polite"></span>
+          <button class="btn" id="next" type="button">Next</button>
+        </div>
+      </main>
+      <div class="confirmation-modal" id="confirmation-modal" hidden>
+        <div class="confirmation-window" role="dialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-message">
+          <h2 id="confirmation-title">Please confirm</h2>
+          <p id="confirmation-message"></p>
+          <div class="confirmation-actions">
+            <button class="btn confirmation-cancel" id="confirmation-cancel" type="button">Cancel</button>
+            <button class="btn" id="confirmation-accept" type="button">Continue</button>
+          </div>
         </div>
       </div>
     </div>
+    <script src="js/auth.js"></script>
     <script src="js/config.js"></script>
     <script src="js/slide.js"></script>
     <script src="js/main.js"></script>

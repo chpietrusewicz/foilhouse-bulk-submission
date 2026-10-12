@@ -49,6 +49,57 @@ body {
   display: flex;
   flex-direction: column;
 }
+#auth-screen[hidden],
+#app-shell[hidden] {
+  display: none;
+}
+.auth-screen {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg);
+}
+.auth-panel {
+  width: min(100%, 460px);
+  padding: 40px 32px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 18px 60px rgb(31 35 45 / 12%);
+  text-align: center;
+}
+.auth-panel img {
+  width: 84px;
+  height: 84px;
+  object-fit: contain;
+  margin-bottom: 14px;
+}
+.auth-kicker {
+  margin: 0 0 8px;
+  color: var(--link);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.auth-panel h1 {
+  max-width: none;
+  font-size: clamp(2.8rem, 10vw, 4.5rem);
+}
+.auth-copy {
+  margin: 16px auto 24px;
+  color: var(--muted);
+}
+#google-signin {
+  min-height: 40px;
+  display: flex;
+  justify-content: center;
+}
+.auth-error {
+  margin: 18px 0 0;
+  color: #a84444;
+  font-weight: 700;
+}
 .bar {
   background: var(--navy);
   border-bottom: 4px solid var(--blue);
