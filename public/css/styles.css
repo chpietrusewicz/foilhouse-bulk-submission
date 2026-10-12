@@ -120,7 +120,7 @@ body {
   gap: 14px;
   text-decoration: none;
   color: #fff;
-  margin-right: auto;
+  margin-right: 0;
 }
 .logo img {
   width: 56px;
@@ -131,6 +131,14 @@ body {
   font: 400 1.5rem var(--head);
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+.account-welcome {
+  margin: 0 auto 0 0;
+  color: #fff;
+  font-size: 0.95rem;
+}
+.account-welcome strong {
+  color: var(--blue);
 }
 .bar nav {
   display: flex;

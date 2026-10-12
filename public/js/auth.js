@@ -2,13 +2,15 @@ const authScreen = document.getElementById("auth-screen");
 const appShell = document.getElementById("app-shell");
 const googleSignin = document.getElementById("google-signin");
 const authError = document.getElementById("auth-error");
+const accountName = document.getElementById("account-name");
 
 function showAuthError(message) {
   authError.textContent = message;
   authError.hidden = false;
 }
 
-function enterApp() {
+function enterApp(user) {
+  accountName.textContent = user?.name || user?.email || "there";
   authScreen.hidden = true;
   appShell.hidden = false;
 }
@@ -22,7 +24,7 @@ async function finishGoogleSignIn(response) {
     });
     const data = await result.json();
     if (!result.ok) throw new Error(data.error || "Google sign-in failed.");
-    enterApp();
+    enterApp(data.user);
   } catch (error) {
     showAuthError(error.message);
   }
@@ -56,7 +58,7 @@ async function initializeAuth() {
     const sessionResponse = await fetch("/api/auth/me");
     const session = await sessionResponse.json();
     if (session.user) {
-      enterApp();
+      enterApp(session.user);
       return;
     }
 
