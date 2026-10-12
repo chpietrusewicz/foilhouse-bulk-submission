@@ -3,6 +3,7 @@ const appShell = document.getElementById("app-shell");
 const googleSignin = document.getElementById("google-signin");
 const authError = document.getElementById("auth-error");
 const accountName = document.getElementById("account-name");
+const adminLink = document.getElementById("admin-link");
 
 function showAuthError(message) {
   authError.textContent = message;
@@ -10,9 +11,14 @@ function showAuthError(message) {
 }
 
 function enterApp(user) {
-  accountName.textContent = user?.name || user?.email || "there";
+  window.authUser = user;
+  const fullName = user?.name || user?.email || "there";
+  accountName.textContent = fullName.trim().split(/\s+/)[0];
+  adminLink.hidden = !user?.isAdmin;
+  history.replaceState(null, "", "#home");
   authScreen.hidden = true;
   appShell.hidden = false;
+  window.dispatchEvent(new CustomEvent("auth-ready"));
 }
 
 async function finishGoogleSignIn(response) {

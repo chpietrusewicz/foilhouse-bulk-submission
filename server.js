@@ -10,18 +10,52 @@ const multer = require("multer");
 const nodemailer = require("nodemailer");
 const rateLimit = require("express-rate-limit");
 const { OAuth2Client } = require("google-auth-library");
+const { applicationDefault, initializeApp } = require("firebase-admin/app");
+const { FieldValue, getFirestore } = require("firebase-admin/firestore");
 
 /* ---------- Config ---------- */
 
 const PORT = process.env.PORT || 3000;
 const IS_PROD = process.env.NODE_ENV === "production";
 const NOTIFY_EMAIL = process.env.SUBMISSION_EMAIL || "foilhousetcg@gmail.com";
+const ADMIN_EMAIL = NOTIFY_EMAIL.toLowerCase();
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, "data", "submissions"));
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const AUTH_SESSION_SECRET = process.env.AUTH_SESSION_SECRET || "";
+const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || "";
+const FIREBASE_CREDENTIALS = process.env.GOOGLE_APPLICATION_CREDENTIALS || "";
 const AUTH_COOKIE = "foilhouse_auth";
 const AUTH_SESSION_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID || undefined);
+let firestore = null;
+const SUBMISSION_STATUSES = [
+  "pending review",
+  "pending user approval",
+  "pending user edit",
+  "waiting user shipment",
+  "waiting for shipment",
+  "Foilhouse card review",
+  "paid",
+];
+const STATUS_PRIORITY = new Map(SUBMISSION_STATUSES.map((status, index) => [status, index]));
+
+if (
+  FIREBASE_PROJECT_ID &&
+  FIREBASE_CREDENTIALS &&
+  fs.existsSync(path.resolve(FIREBASE_CREDENTIALS))
+) {
+  try {
+    initializeApp({
+      credential: applicationDefault(),
+      projectId: FIREBASE_PROJECT_ID,
+    });
+    firestore = getFirestore();
+    firestore.settings({ preferRest: true });
+    console.log(`Firestore enabled for project ${FIREBASE_PROJECT_ID}`);
+  } catch (error) {
+    console.error("Firestore could not be initialized:", error.message);
+  }
+}
 
 const MAX_PHOTOS = 10;
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
@@ -98,6 +132,62 @@ function requireAuth(req, res, next) {
   req.user = readAuthUser(req);
   if (!req.user) return res.status(401).json({ error: "Please sign in before submitting." });
   next();
+}
+
+function requireFirestore(req, res, next) {
+  if (!firestore) return res.status(503).json({ error: "The submission database is not configured." });
+  next();
+}
+
+function requireAdmin(req, res, next) {
+  if (req.user.email.toLowerCase() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: "Administrator access is required." });
+  }
+  next();
+}
+
+function saveUserToFirestore(user) {
+  if (!firestore) return Promise.resolve();
+  return firestore.collection("users").doc(user.id).set(
+    {
+      ...user,
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
+function saveSubmissionToFirestore(record) {
+  return firestore
+    .collection("users")
+    .doc(record.submittedBy.id)
+    .collection("submissions")
+    .doc(record.id)
+    .set({ ...record, updatedAt: FieldValue.serverTimestamp() });
+}
+
+function submissionFromSnapshot(snapshot) {
+  return { ...snapshot.data(), id: snapshot.id };
+}
+
+function sortSubmissions(submissions) {
+  return submissions.sort((first, second) => {
+    const statusDifference =
+      (STATUS_PRIORITY.get(first.status) ?? Number.MAX_SAFE_INTEGER) -
+      (STATUS_PRIORITY.get(second.status) ?? Number.MAX_SAFE_INTEGER);
+    if (statusDifference !== 0) return statusDifference;
+    return String(second.receivedAt).localeCompare(String(first.receivedAt));
+  });
+}
+
+async function getUserSubmissions(userId) {
+  const snapshot = await firestore.collection("users").doc(userId).collection("submissions").get();
+  return sortSubmissions(snapshot.docs.map(submissionFromSnapshot));
+}
+
+async function getAllSubmissions() {
+  const snapshot = await firestore.collectionGroup("submissions").get();
+  return sortSubmissions(snapshot.docs.map(submissionFromSnapshot));
 }
 
 /* ---------- Email (optional) ---------- */
@@ -276,7 +366,8 @@ app.get("/api/auth/config", (req, res) => {
 });
 
 app.get("/api/auth/me", (req, res) => {
-  res.json({ user: readAuthUser(req) });
+  const user = readAuthUser(req);
+  res.json({ user: user ? { ...user, isAdmin: user.email.toLowerCase() === ADMIN_EMAIL } : null });
 });
 
 app.post("/api/auth/google", async (req, res) => {
@@ -297,11 +388,15 @@ app.post("/api/auth/google", async (req, res) => {
     }
     const user = {
       id: payload.sub,
-      email: payload.email,
+      email: payload.email.toLowerCase(),
       name: payload.name || payload.email,
       picture: payload.picture || "",
+      isAdmin: payload.email.toLowerCase() === ADMIN_EMAIL,
     };
     setAuthCookie(res, user);
+    saveUserToFirestore(user).catch((error) => {
+      console.error("User could not be saved to Firestore:", error.message);
+    });
     res.json({ user });
   } catch (error) {
     console.error("Google sign-in failed:", error.message);
@@ -314,7 +409,43 @@ app.post("/api/auth/logout", (req, res) => {
   res.json({ ok: true });
 });
 
-app.post("/api/submissions", requireAuth, submissionLimiter, assignId, receiveUpload, (req, res) => {
+app.get("/api/submissions", requireAuth, requireFirestore, async (req, res, next) => {
+  try {
+    res.json({ submissions: await getUserSubmissions(req.user.id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/admin/submissions", requireAuth, requireAdmin, requireFirestore, async (req, res, next) => {
+  try {
+    res.json({ submissions: await getAllSubmissions() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/api/admin/submissions/:id/status", requireAuth, requireAdmin, requireFirestore, async (req, res, next) => {
+  const status = clean(req.body.status, 60);
+  if (!SUBMISSION_STATUSES.includes(status)) {
+    return res.status(400).json({ error: "That submission status is not valid." });
+  }
+
+  try {
+    const snapshot = await firestore
+      .collectionGroup("submissions")
+      .where("id", "==", req.params.id)
+      .limit(1)
+      .get();
+    if (snapshot.empty) return res.status(404).json({ error: "Submission not found." });
+    await snapshot.docs[0].ref.update({ status, updatedAt: new Date().toISOString() });
+    res.json({ ok: true, status });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/submissions", requireAuth, requireFirestore, submissionLimiter, assignId, receiveUpload, async (req, res) => {
   const files = req.files || [];
 
   // Hidden honeypot field: bots fill it in, people never see it.
@@ -332,15 +463,20 @@ app.post("/api/submissions", requireAuth, submissionLimiter, assignId, receiveUp
   const record = {
     id: req.submissionId,
     receivedAt: new Date().toISOString(),
-    status: "pending",
+    status: "pending review",
     submittedBy: req.user,
     ...data,
     photos: files.map((f) => f.filename),
   };
   fs.writeFileSync(path.join(req.submissionDir, "submission.json"), JSON.stringify(record, null, 2));
 
+  try {
+    await saveSubmissionToFirestore(record);
+  } catch (error) {
+    console.error(`[${record.id}] Firestore save failed:`, error.message);
+    return res.status(500).json({ error: "The submission could not be saved. Please try again." });
+  }
   res.json({ ok: true, id: record.id });
-  notify(record, files).catch((err) => console.error(`[${record.id}] email failed:`, err.message));
 });
 
 app.use((err, req, res, next) => {

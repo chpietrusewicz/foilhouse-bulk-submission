@@ -18,6 +18,7 @@ const formSlides = [
 ];
 
 const tabs = [
+  new Slide("home", "Home", null),
   new Slide("form", "Bulk submission", null),
   new Slide("shipping", "Shipping help", "/slides/shipping.html"),
   new Slide("info", "About the program", "/slides/info.html"),
@@ -35,9 +36,124 @@ let cardEntries = [
 ];
 
 function tabIndexFromHash() {
-  const requested = (location.hash || "#form").slice(1);
+  const requested = (location.hash || "#home").slice(1);
   const index = tabs.findIndex((tab) => tab.id === requested);
   return index === -1 ? 0 : index;
+}
+
+const submissionStatuses = [
+  "pending review",
+  "pending user approval",
+  "pending user edit",
+  "waiting user shipment",
+  "waiting for shipment",
+  "Foilhouse card review",
+  "paid",
+];
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function formatSubmissionDate(value) {
+  if (!value) return "Date unavailable";
+  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(new Date(value));
+}
+
+function statusOptions(selected) {
+  return submissionStatuses
+    .map((status) => `<option value="${escapeHtml(status)}" ${status === selected ? "selected" : ""}>${escapeHtml(status)}</option>`)
+    .join("");
+}
+
+function submissionCards(submissions, admin = false) {
+  if (!submissions.length) return `<p class="empty-state">No submissions yet.</p>`;
+
+  return `<div class="submission-list">${submissions
+    .map(
+      (submission) => `
+        <article class="submission-item">
+          <div>
+            <h3>${escapeHtml(admin ? submission.name : `Submission ${submission.id}`)}</h3>
+            <p class="muted">${admin ? `${escapeHtml(submission.email)} · ` : ""}${formatSubmissionDate(submission.receivedAt)} · ${Number(submission.count || 0).toLocaleString()} cards</p>
+          </div>
+          <div class="submission-status">
+            ${admin
+              ? `<label>Status<select class="status-select" data-submission-id="${escapeHtml(submission.id)}">${statusOptions(submission.status)}</select></label>`
+              : `<span class="status-label">${escapeHtml(submission.status)}</span>`}
+          </div>
+        </article>
+      `,
+    )
+    .join("")}</div>`;
+}
+
+async function fetchSubmissions(url) {
+  const response = await fetch(url);
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "Could not load submissions.");
+  return result.submissions;
+}
+
+async function renderHome() {
+  try {
+    const submissions = await fetchSubmissions("/api/submissions");
+    $("content").innerHTML = `
+      <section class="account-home">
+        <div class="account-heading">
+          <div><p class="eyebrow">Account</p><h1>My submissions</h1></div>
+          <button class="btn" id="new-submission" type="button">Add submission</button>
+        </div>
+        ${submissionCards(submissions)}
+      </section>
+    `;
+    $("new-submission").onclick = () => { window.location.hash = "#form"; };
+    $("form-navigation").style.display = "none";
+    document.title = "Foil House | My submissions";
+  } catch (error) {
+    showLoadError(error.message);
+  }
+}
+
+async function renderAdmin() {
+  try {
+    const submissions = await fetchSubmissions("/api/admin/submissions");
+    $("content").innerHTML = `
+      <section class="account-home admin-home">
+        <div class="account-heading">
+          <div><p class="eyebrow">Admin</p><h1>All submissions</h1></div>
+          <button class="btn" id="admin-home" type="button">My submissions</button>
+        </div>
+        ${submissionCards(submissions, true)}
+      </section>
+    `;
+    $("admin-home").onclick = () => { window.location.hash = "#home"; };
+    document.querySelectorAll(".status-select").forEach((select) => {
+      select.addEventListener("change", async () => {
+        select.disabled = true;
+        const response = await fetch(`/api/admin/submissions/${encodeURIComponent(select.dataset.submissionId)}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: select.value }),
+        });
+        if (!response.ok) {
+          select.disabled = false;
+          showLoadError("The submission status could not be updated.");
+          return;
+        }
+        select.disabled = false;
+      });
+    });
+    $("form-navigation").style.display = "none";
+    document.title = "Foil House | All submissions";
+  } catch (error) {
+    showLoadError(error.message);
+  }
 }
 
 async function loadSlideHtml(slide) {
@@ -48,11 +164,11 @@ async function loadSlideHtml(slide) {
   return response.text();
 }
 
-function showLoadError() {
+function showLoadError(message = "Please reload the page and try again.") {
   $("content").innerHTML = `
     <section>
-      <h2>Unable to load this section</h2>
-      <p class="muted">Please reload the page and try again.</p>
+      <h2>Unable to load your submissions</h2>
+      <p class="muted">${escapeHtml(message)}</p>
     </section>
   `;
   $("form-navigation").style.display = "none";
@@ -301,7 +417,11 @@ async function renderFormSlide() {
 }
 
 async function renderTab() {
-  if (activeTab === 0) {
+  if (tabs[activeTab].id === "home") {
+    await renderHome();
+    return;
+  }
+  if (tabs[activeTab].id === "form") {
     await renderFormSlide();
     return;
   }
@@ -324,6 +444,10 @@ async function renderTab() {
 
 function showTab() {
   saveFormDraft();
+  if (location.hash === "#admin") {
+    renderAdmin();
+    return;
+  }
   activeTab = tabIndexFromHash();
   renderTab();
 }
@@ -390,6 +514,7 @@ async function handleSubmit(event) {
     if (!response.ok) throw new Error(result.error || "The submission failed.");
     $("out").querySelector("b").textContent = "Submission received.";
     $("txt").value = `Your submission ID is ${result.id}. We will review it and follow up by email.`;
+    window.location.hash = "#home";
   } catch (error) {
     $("out").querySelector("b").textContent = "We could not send your submission.";
     $("txt").value = error.message;
@@ -455,4 +580,5 @@ async function handleNext() {
 $("back").addEventListener("click", () => navigateFormSlide(activeFormSlide - 1));
 $("next").addEventListener("click", handleNext);
 window.addEventListener("hashchange", showTab);
-showTab();
+window.addEventListener("auth-ready", showTab);
+if (window.authUser) showTab();

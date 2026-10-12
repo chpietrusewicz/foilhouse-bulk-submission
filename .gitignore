@@ -1,3 +1,4 @@
 node_modules/
 .env
 data/submissions/
+firebase-service-account*.json
