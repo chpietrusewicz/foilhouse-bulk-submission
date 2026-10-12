@@ -432,13 +432,10 @@ app.patch("/api/admin/submissions/:id/status", requireAuth, requireAdmin, requir
   }
 
   try {
-    const snapshot = await firestore
-      .collectionGroup("submissions")
-      .where("id", "==", req.params.id)
-      .limit(1)
-      .get();
-    if (snapshot.empty) return res.status(404).json({ error: "Submission not found." });
-    await snapshot.docs[0].ref.update({ status, updatedAt: new Date().toISOString() });
+    const snapshot = await firestore.collectionGroup("submissions").get();
+    const submission = snapshot.docs.find((doc) => doc.id === req.params.id);
+    if (!submission) return res.status(404).json({ error: "Submission not found." });
+    await submission.ref.update({ status, updatedAt: new Date().toISOString() });
     res.json({ ok: true, status });
   } catch (error) {
     next(error);

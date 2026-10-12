@@ -84,7 +84,7 @@ function submissionCards(submissions, admin = false) {
           </div>
           <div class="submission-status">
             ${admin
-              ? `<label>Status<select class="status-select" data-submission-id="${escapeHtml(submission.id)}">${statusOptions(submission.status)}</select></label>`
+              ? `<label>Status<select class="status-select" data-submission-id="${escapeHtml(submission.id)}" data-previous-status="${escapeHtml(submission.status)}">${statusOptions(submission.status)}</select></label>`
               : `<span class="status-label">${escapeHtml(submission.status)}</span>`}
           </div>
         </article>
@@ -129,12 +129,14 @@ async function renderAdmin() {
           <div><p class="eyebrow">Admin</p><h1>All submissions</h1></div>
           <button class="btn" id="admin-home" type="button">My submissions</button>
         </div>
+        <p class="admin-feedback" id="admin-feedback" role="alert" hidden></p>
         ${submissionCards(submissions, true)}
       </section>
     `;
     $("admin-home").onclick = () => { window.location.hash = "#home"; };
     document.querySelectorAll(".status-select").forEach((select) => {
       select.addEventListener("change", async () => {
+        const previousStatus = select.dataset.previousStatus || select.value;
         select.disabled = true;
         const response = await fetch(`/api/admin/submissions/${encodeURIComponent(select.dataset.submissionId)}/status`, {
           method: "PATCH",
@@ -142,10 +144,14 @@ async function renderAdmin() {
           body: JSON.stringify({ status: select.value }),
         });
         if (!response.ok) {
+          const result = await response.json().catch(() => ({}));
+          select.value = previousStatus;
           select.disabled = false;
-          showLoadError("The submission status could not be updated.");
+          $("admin-feedback").textContent = result.error || "The submission status could not be updated.";
+          $("admin-feedback").hidden = false;
           return;
         }
+        select.dataset.previousStatus = select.value;
         select.disabled = false;
       });
     });

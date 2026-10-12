@@ -177,6 +177,11 @@ body {
   padding: 28px 0;
   color: var(--muted);
 }
+.admin-feedback {
+  margin: 0 0 16px;
+  color: #a84444;
+  font-weight: 700;
+}
 .bar {
   background: var(--navy);
   border-bottom: 4px solid var(--blue);
