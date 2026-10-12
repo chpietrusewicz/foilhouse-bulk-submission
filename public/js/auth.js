@@ -4,6 +4,7 @@ const googleSignin = document.getElementById("google-signin");
 const authError = document.getElementById("auth-error");
 const accountName = document.getElementById("account-name");
 const adminLink = document.getElementById("admin-link");
+const signout = document.getElementById("signout");
 
 function showAuthError(message) {
   authError.textContent = message;
@@ -19,6 +20,19 @@ function enterApp(user) {
   authScreen.hidden = true;
   appShell.hidden = false;
   window.dispatchEvent(new CustomEvent("auth-ready"));
+}
+
+async function signOut() {
+  try {
+    const response = await fetch("/api/auth/logout", { method: "POST" });
+    if (!response.ok) throw new Error("Sign out failed. Please try again.");
+    window.authUser = null;
+    appShell.hidden = true;
+    authScreen.hidden = false;
+    history.replaceState(null, "", "/");
+  } catch (error) {
+    showAuthError(error.message);
+  }
 }
 
 async function finishGoogleSignIn(response) {
@@ -58,6 +72,8 @@ function loadGoogleIdentityServices(clientId) {
   script.onerror = () => showAuthError("Google sign-in could not load. Please try again.");
   document.head.append(script);
 }
+
+signout.addEventListener("click", signOut);
 
 async function initializeAuth() {
   try {
